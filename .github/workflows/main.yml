@@ -1,4 +1,4 @@
-name: VPN Checker Xray
+name: VPN Checker Pro
 on:
   workflow_dispatch:
   push:
@@ -12,84 +12,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install Xray
+      - name: Install Xray Checker
         run: |
-          curl -L https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip -o xray.zip
-          unzip xray.zip xray
-          chmod +x xray
+          # Используем команду из твоей инструкции для Linux amd64
+          curl -sL -o - $(curl -s https://api.github.com/repos/kutovoys/xray-checker/releases/latest | grep "browser_download_url.*linux-amd64.tar.gz" | cut -d'"' -f4) | tar -xz
+          chmod +x xray-checker
 
-      - name: Create Python Checker
+      - name: Run Check
         run: |
-          cat << 'EOF' > internal_check.py
-          import subprocess, json, time, os, socket, requests
-          from concurrent.futures import ThreadPoolExecutor
-
-          def get_free_port():
-              with socket.socket() as s:
-                  s.bind(('', 0))
-                  return s.getsockname()[1]
-
-          def test_config(link):
-              if not link.startswith("vless://"): return None
-              port = get_free_port()
-              try:
-                  # Парсинг базовых данных
-                  main = link.split('://')[1]
-                  uuid, tail = main.split('@')
-                  addr_port = tail.split('?')[0].split('#')[0]
-                  addr, vport = addr_port.rsplit(':', 1)
-                  
-                  config = {
-                      "log": {"loglevel": "none"},
-                      "inbounds": [{"port": port, "listen": "127.0.0.1", "protocol": "socks"}],
-                      "outbounds": [{"protocol": "vless", "settings": {"vnext": [{"address": addr, "port": int(vport), "users": [{"id": uuid, "encryption": "none"}]}]}}]
-                  }
-                  
-                  # Добавление Reality/TLS если есть
-                  if '?' in tail:
-                      params = dict(x.split('=') for x in tail.split('?')[1].split('#')[0].split('&') if '=' in x)
-                      stream = {"network": params.get('type', 'tcp'), "security": params.get('security', 'none')}
-                      if params.get('security') == 'reality':
-                          stream["realitySettings"] = {"serverName": params.get('sni'), "publicKey": params.get('pbk'), "shortId": params.get('sid', ''), "fingerprint": params.get('fp', 'chrome')}
-                      config["outbounds"][0]["streamSettings"] = stream
-
-                  with open(f"c_{port}.json", "w") as f: json.dump(config, f)
-                  proc = subprocess.Popen(["./xray", "-c", f"c_{port}.json"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                  time.sleep(2)
-                  
-                  success = False
-                  try:
-                      r = requests.get("http://cp.cloudflare.com/generate_204", proxies={"http": f"socks5h://127.0.0.1:{port}", "https": f"socks5h://127.0.0.1:{port}"}, timeout=5)
-                      if r.status_code == 204: success = True
-                  except: pass
-                  
-                  proc.terminate()
-                  os.remove(f"c_{port}.json")
-                  return link if success else None
-              except: return None
-
-          with open("check.txt", "r") as f:
-              links = [l.strip() for l in f if "://" in l]
-
-          with ThreadPoolExecutor(max_workers=5) as ex:
-              results = [r for r in ex.map(test_config, links) if r]
-
-          header = "#profile-title: LLxickVPN\n#profile-update-interval: 12\n\n"
-          with open("results.txt", "w") as f:
-              f.write(header)
-              for i, l in enumerate(results, 1):
-                  f.write(f"{l.split('#')[0]}#🇷🇺 [LTE] №{i}\n")
-          EOF
-
-      - name: Run Checker
-        run: |
-          pip install requests
-          python3 internal_check.py
+          # 1. Формируем заголовок для итогового файла
+          echo "#profile-title: LLxickVPN" > results.txt
+          echo "#profile-update-interval: 12" >> results.txt
+          echo "" >> results.txt
+          
+          # 2. Запускаем чекер в режиме "одиночной проверки" (--run-once)
+          # Мы скармливаем ему локальный файл через file://
+          ./xray-checker --subscription-url="file://$GITHUB_WORKSPACE/check.txt" --run-once
+          
+          # 3. После работы чекер создаст отчет. 
+          # ВНИМАНИЕ: Нам нужно достать только живые ссылки. 
+          # Обычно такие чекеры выводят результат в консоль или создают файл.
+          # Если он просто выводит в консоль, мы перенаправим вывод:
+          ./xray-checker --subscription-url="file://$GITHUB_WORKSPACE/check.txt" --run-once > output.log
+          
+          # Очистка и нумерация (фильтруем только строки с vless://)
+          grep "vless://" output.log | while read -r line; do
+            n=$((n+1))
+            base=$(echo $line | cut -d'#' -f1)
+            echo "${base}#🇷🇺 [LTE] №$n" >> results.txt
+          done
 
       - name: Push results
         run: |
           git config --global user.name "VPN-Bot"
           git config --global user.email "bot@github.com"
           git add results.txt
-          git commit -m "Update" || exit 0
+          git commit -m "Update via Xray Checker Pro" || exit 0
           git push
