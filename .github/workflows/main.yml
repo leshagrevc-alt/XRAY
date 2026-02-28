@@ -1,7 +1,7 @@
 name: VPN Auto-Collector and Checker
 on:
   schedule:
-    - cron: '0 * * * *' # Запуск раз в час для экономии лимитов GitHub
+    - cron: '*/30 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -12,7 +12,9 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Install Dependencies
-        run: sudo apt-get install -y bc # Нужно для фильтрации по пингу
+        run: |
+          sudo apt-get install -y bc python3-pip
+          pip3 install matplotlib requests pillow
 
       - name: Install Xray Checker
         run: |
@@ -21,11 +23,9 @@ jobs:
 
       - name: Collect Configs
         run: |
-          # Очищаем временные файлы
           > check.txt
           > raw_links.txt
-          
-          # Сбор Источника 1 - BLACK (LTE)
+
           curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt > s1.txt
           n=1
           while read -r line; do
@@ -36,7 +36,6 @@ jobs:
             fi
           done < s1.txt
 
-          # Сбор Источника 2 - WHITE (WI-FI)
           curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt > s2.txt
           n=1
           while read -r line; do
@@ -49,45 +48,160 @@ jobs:
 
       - name: Run Check
         run: |
-          # Считаем сколько реально ссылок
           TOTAL=$(grep -c "vless://" check.txt || echo "0")
           echo "Всего собрано: $TOTAL"
 
-          # Запуск сервера
-          python3 -m http.server 8000 & 
+          python3 -m http.server 8000 &
           sleep 3
 
-          # Запуск чекера с таймаутом 15 секунд
           ./xray-checker --subscription-url="http://localhost:8000/check.txt" --run-once > full_log.txt 2>&1
-          
-          # Очищаем и создаем results.txt с нуля
+
           echo "#profile-title: LLxickVPN" > results.txt
           echo "#profile-update-interval: 1" >> results.txt
           echo "#subscription-userinfo: total=0; expire=17837459931" >> results.txt
           echo "" >> results.txt
 
-          # Фильтрация рабочих с пингом менее 5 секунд
           grep "Success" full_log.txt | while read -r line; do
-            # Вырезаем значение задержки (например 1.25)
             latency=$(echo "$line" | grep -oP 'Latency: \K[0-9.]+' | head -n 1)
-            # Вырезаем имя прокси
             proxy_name=$(echo "$line" | sed -E 's/^[0-9\/ :]* [0-9]{2}:[0-9]{2}:[0-9]{2} (.*) \| Success.*/\1/' | xargs)
-            
             if [ ! -z "$latency" ] && [ ! -z "$proxy_name" ]; then
-                # Если пинг меньше 5.0 секунд — сохраняем
-                if (( $(echo "$latency < 5.0" | bc -l) )); then
-                    grep -F "$proxy_name" check.txt | head -n 1 >> results.txt || true
-                fi
+              if (( $(echo "$latency < 5.0" | bc -l) )); then
+                grep -F "$proxy_name" check.txt | head -n 1 >> results.txt || true
+              fi
             fi
           done
-          
+
           FINAL=$(grep -c "vless://" results.txt || echo "0")
+          echo "TOTAL=$TOTAL" >> $GITHUB_ENV
+          echo "FINAL=$FINAL" >> $GITHUB_ENV
           echo "Финальный результат: $FINAL рабочих конфигов из $TOTAL"
+
+      - name: Load History & Build Chart
+        run: |
+          # Загружаем историю (JSON файл в репозитории)
+          if [ -f "history.json" ]; then
+            cp history.json history_prev.json
+          else
+            echo "[]" > history_prev.json
+          fi
+
+          # Python-скрипт для обновления истории и построения графика
+          python3 << 'PYEOF'
+          import json, os, datetime, matplotlib
+          matplotlib.use('Agg')
+          import matplotlib.pyplot as plt
+          import matplotlib.dates as mdates
+          from datetime import timezone
+
+          total = int(os.environ.get("TOTAL", 0))
+          final = int(os.environ.get("FINAL", 0))
+          now = datetime.datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          # Загружаем историю
+          try:
+              with open("history_prev.json") as f:
+                  history = json.load(f)
+          except:
+              history = []
+
+          # Добавляем новую точку
+          history.append({"time": now, "total": total, "working": final})
+
+          # Храним только последние 24 точки (24 часа)
+          history = history[-24:]
+
+          # Сохраняем обновлённую историю
+          with open("history.json", "w") as f:
+              json.dump(history, f, indent=2)
+
+          # Рисуем график
+          times = [datetime.datetime.fromisoformat(h["time"].replace("Z", "+00:00")) for h in history]
+          totals = [h["total"] for h in history]
+          workings = [h["working"] for h in history]
+
+          fig, ax = plt.subplots(figsize=(10, 5))
+          fig.patch.set_facecolor('#1a1a2e')
+          ax.set_facecolor('#16213e')
+
+          ax.plot(times, totals, color='#4fc3f7', linewidth=2, marker='o', markersize=5, label='Всего конфигов')
+          ax.plot(times, workings, color='#81c784', linewidth=2, marker='o', markersize=5, label='Рабочих (<5s)')
+          ax.fill_between(times, workings, alpha=0.15, color='#81c784')
+
+          ax.set_title('📊 VPN Конфиги — Последние 24 часа', color='white', fontsize=14, pad=15)
+          ax.set_xlabel('Время (UTC)', color='#aaaaaa')
+          ax.set_ylabel('Количество', color='#aaaaaa')
+          ax.tick_params(colors='#aaaaaa')
+          ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+          ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+          plt.xticks(rotation=30)
+
+          for spine in ax.spines.values():
+              spine.set_edgecolor('#333355')
+
+          ax.legend(facecolor='#1a1a2e', labelcolor='white', edgecolor='#333355')
+          ax.grid(alpha=0.15, color='white')
+
+          # Аннотация последних значений
+          if times:
+              ax.annotate(f'  {final}', xy=(times[-1], final), color='#81c784', fontsize=10)
+              ax.annotate(f'  {total}', xy=(times[-1], total), color='#4fc3f7', fontsize=10)
+
+          plt.tight_layout()
+          plt.savefig("chart.png", dpi=130, bbox_inches='tight', facecolor='#1a1a2e')
+          print("График сохранён: chart.png")
+
+          # Считаем изменение относительно предыдущего часа
+          prev_working = history[-2]["working"] if len(history) >= 2 else final
+          delta = final - prev_working
+          delta_str = f"+{delta}" if delta > 0 else str(delta)
+          with open("delta.txt", "w") as f:
+              f.write(delta_str)
+          PYEOF
+
+      - name: Send Telegram Notification
+        env:
+          TG_TOKEN: "8692993139:AAHcTnsA-fJk89bdIcIURr-bVkzvHjeLwb4"
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          DELTA=$(cat delta.txt 2>/dev/null || echo "0")
+          TIMESTAMP=$(date -u +'%d.%m.%Y %H:%M UTC')
+
+          # Эмодзи по изменению
+          if [[ "$DELTA" == +* && "$DELTA" != "+0" ]]; then
+            TREND="📈"
+          elif [[ "$DELTA" == -* ]]; then
+            TREND="📉"
+          else
+            TREND="➡️"
+          fi
+
+          # Процент рабочих
+          if [ "$TOTAL" -gt 0 ]; then
+            PERCENT=$(echo "scale=1; $FINAL * 100 / $TOTAL" | bc)
+          else
+            PERCENT="0"
+          fi
+
+          MESSAGE="🔐 *LLxickVPN — Отчёт проверки*
+          
+          🕐 *Время:* \`$TIMESTAMP\`
+          📦 *Всего собрано:* \`$TOTAL\`
+          ✅ *Рабочих (\<5s):* \`$FINAL\` ($PERCENT%)
+          $TREND *Изменение:* \`$DELTA\` за час
+          
+          ↩️ Обновление каждый час автоматически"
+
+          # Отправка графика с подписью
+          curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendPhoto" \
+            -F "chat_id=${TG_CHAT_ID}" \
+            -F "photo=@chart.png" \
+            -F "caption=${MESSAGE}" \
+            -F "parse_mode=Markdown"
 
       - name: Push results
         run: |
           git config --global user.name "VPN-Bot"
           git config --global user.email "bot@github.com"
-          git add results.txt
+          git add results.txt history.json chart.png
           git commit -m "Auto-update: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
           git push
