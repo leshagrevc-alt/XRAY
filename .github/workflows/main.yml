@@ -26,7 +26,7 @@ jobs:
           > check.txt
           > raw_links.txt
 
-          curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt > s1.txt
+          curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt > s1.txt
           n=1
           while read -r line; do
             if [[ $line == vless://* ]]; then
@@ -36,7 +36,17 @@ jobs:
             fi
           done < s1.txt
 
-          curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt > s2.txt
+          curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/WHITE-CIDR-RU-checked.txt > s3.txt
+          n=1
+          while read -r line; do
+            if [[ $line == vless://* ]]; then
+              base=$(echo "$line" | cut -d'#' -f1)
+              echo "${base}#[LTE] N$n" >> check.txt
+              n=$((n+1))
+            fi
+          done < s3.txt
+
+          curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt > s2.txt
           n=1
           while read -r line; do
             if [[ $line == vless://* ]]; then
@@ -71,7 +81,7 @@ jobs:
             latency=$(echo "$line" | grep -oP 'Latency: \K[0-9.]+' | head -n 1)
             proxy_name=$(echo "$line" | sed -E 's/^[0-9\/ :]* [0-9]{2}:[0-9]{2}:[0-9]{2} (.*) \| Success.*/\1/' | xargs)
             if [ ! -z "$latency" ] && [ ! -z "$proxy_name" ]; then
-              if (( $(echo "$latency < 5.0" | bc -l) )); then
+              if (( $(echo "$latency < 3.0" | bc -l) )); then
                 grep -F "$proxy_name" check.txt | head -n 1 >> results.txt || true
               fi
             fi
@@ -125,7 +135,7 @@ jobs:
           ax.set_facecolor('#16213e')
 
           ax.plot(times, totals, color='#4fc3f7', linewidth=2, marker='o', markersize=4, label='Всего конфигов')
-          ax.plot(times, workings, color='#81c784', linewidth=2, marker='o', markersize=4, label='Рабочих (<5s)')
+          ax.plot(times, workings, color='#81c784', linewidth=2, marker='o', markersize=4, label='Рабочих (<3s)')
           ax.fill_between(times, workings, alpha=0.15, color='#81c784')
 
           # Заголовок без эмодзи — они ломаются в matplotlib без спец. шрифта
@@ -182,7 +192,7 @@ jobs:
           LINE1="🔐 *LLxickVPN — Отчёт проверки*"
           LINE2="🕐 *Обновлено:* \`$UPD_DATE UTC\`"
           LINE3="📦 *Всего собрано:* \`$TOTAL\`"
-          LINE4="✅ *Рабочих (<5s):* \`$FINAL\` ($PERCENT%)"
+          LINE4="✅ *Рабочих (<3s):* \`$FINAL\` ($PERCENT%)"
           LINE5="$TREND *Изменение:* \`$DELTA\` за 30 мин"
           LINE6="↩️ Обновление каждые 30 минут автоматически"
           LINE7="📢 @LLxickVPN"
