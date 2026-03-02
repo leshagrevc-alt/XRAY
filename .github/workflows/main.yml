@@ -24,7 +24,6 @@ jobs:
       - name: Collect Configs
         run: |
           > check.txt
-          > raw_links.txt
 
           curl -s https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/main/BLACK_VLESS_RUS_mobile.txt > s1.txt
           n=1
@@ -77,13 +76,15 @@ jobs:
 
           > wifi.tmp
           > lte.tmp
+          > all_latencies.tmp
 
           grep "Success" full_log.txt | while read -r line; do
             latency=$(echo "$line" | grep -oP 'Latency: \K[0-9.]+' | head -n 1)
             proxy_name=$(echo "$line" | sed -E 's/^[0-9\/ :]* [0-9]{2}:[0-9]{2}:[0-9]{2} (.*) \| Success.*/\1/' | xargs)
             if [ ! -z "$latency" ] && [ ! -z "$proxy_name" ]; then
+              # Сохраняем все латентности для статистики
+              echo "$latency" >> all_latencies.tmp
               if (( $(echo "$latency < 2.0" | bc -l) )); then
-                # Ищем конфиг по точному имени (с номером) — гарантирует уникальность
                 config=$(grep -F "$proxy_name" check.txt | head -n 1)
                 if [ ! -z "$config" ]; then
                   if echo "$config" | grep -q "\[WI-FI\]"; then
@@ -96,21 +97,28 @@ jobs:
             fi
           done
 
-          # 25 лучших WI-FI первыми, затем 25 лучших LTE
-          # Убираем префикс латентности и номер в конце метки при записи в results.txt
+          # 25 лучших WI-FI + 25 лучших LTE, убираем латентность и номер из метки
           sort -n wifi.tmp -o wifi_sorted.tmp
           head -n 25 wifi_sorted.tmp | sed 's/^[0-9.]* //; s/#\[WI-FI\] N[0-9]*$/#[WI-FI]/' >> results.txt
 
           sort -n lte.tmp -o lte_sorted.tmp
           head -n 25 lte_sorted.tmp | sed 's/^[0-9.]* //; s/#\[LTE\] N[0-9]*$/#[LTE]/' >> results.txt
 
-          rm -f wifi.tmp lte.tmp wifi_sorted.tmp lte_sorted.tmp
+          # Считаем статистику латентностей
+          BEST_LATENCY=$(sort -n all_latencies.tmp | head -n 1)
+          AVG_LATENCY=$(awk '{sum+=$1; count++} END {if(count>0) printf "%.3f", sum/count}' all_latencies.tmp)
+          [ -z "$BEST_LATENCY" ] && BEST_LATENCY="0"
+          [ -z "$AVG_LATENCY" ] && AVG_LATENCY="0"
+
+          rm -f wifi.tmp lte.tmp wifi_sorted.tmp lte_sorted.tmp all_latencies.tmp
 
           FINAL=$(grep -c "vless://" results.txt || echo "0")
           echo "TOTAL=$TOTAL" >> $GITHUB_ENV
           echo "FINAL=$FINAL" >> $GITHUB_ENV
           echo "UPD_DATE=$UPD_DATE" >> $GITHUB_ENV
-          echo "Финальный результат: $FINAL рабочих конфигов из $TOTAL"
+          echo "BEST_LATENCY=$BEST_LATENCY" >> $GITHUB_ENV
+          echo "AVG_LATENCY=$AVG_LATENCY" >> $GITHUB_ENV
+          echo "Финальный результат: $FINAL конфигов | лучший: ${BEST_LATENCY}s | средний: ${AVG_LATENCY}s"
 
       - name: Load History & Build Chart
         run: |
@@ -130,6 +138,8 @@ jobs:
           total = int(os.environ.get("TOTAL", 0))
           final = int(os.environ.get("FINAL", 0))
           upd_date = os.environ.get("UPD_DATE", "")
+          best_lat = float(os.environ.get("BEST_LATENCY", 0))
+          avg_lat = float(os.environ.get("AVG_LATENCY", 0))
           now = datetime.datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
           try:
@@ -138,43 +148,64 @@ jobs:
           except:
               history = []
 
-          history.append({"time": now, "total": total, "working": final})
+          history.append({
+              "time": now,
+              "total": total,
+              "working": final,
+              "best_latency": best_lat,
+              "avg_latency": avg_lat
+          })
           history = history[-48:]
 
           with open("history.json", "w") as f:
               json.dump(history, f, indent=2)
 
           times = [datetime.datetime.fromisoformat(h["time"].replace("Z", "+00:00")) for h in history]
-          totals = [h["total"] for h in history]
+          best_lats = [h.get("best_latency", 0) for h in history]
+          avg_lats = [h.get("avg_latency", 0) for h in history]
           workings = [h["working"] for h in history]
 
-          fig, ax = plt.subplots(figsize=(10, 5))
+          fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
           fig.patch.set_facecolor('#1a1a2e')
-          ax.set_facecolor('#16213e')
 
-          ax.plot(times, totals, color='#4fc3f7', linewidth=2, marker='o', markersize=4, label='Всего конфигов')
-          ax.plot(times, workings, color='#81c784', linewidth=2, marker='o', markersize=4, label='Топ 50 (<2s)')
-          ax.fill_between(times, workings, alpha=0.15, color='#81c784')
-
-          ax.set_title(f'LLxickVPN — Последние 24 часа | {upd_date} UTC', color='white', fontsize=13, pad=15)
-          ax.set_xlabel('Время (UTC)', color='#aaaaaa')
-          ax.set_ylabel('Количество', color='#aaaaaa')
-          ax.tick_params(colors='#aaaaaa')
-          ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-          ax.xaxis.set_major_locator(mdates.HourLocator(interval=2))
-          plt.xticks(rotation=30)
-
-          for spine in ax.spines.values():
+          # --- График 1: Латентность ---
+          ax1.set_facecolor('#16213e')
+          ax1.plot(times, best_lats, color='#81c784', linewidth=2, marker='o', markersize=4, label='Лучшая латентность (s)')
+          ax1.plot(times, avg_lats, color='#ffb74d', linewidth=2, marker='o', markersize=4, label='Средняя латентность (s)')
+          ax1.fill_between(times, best_lats, alpha=0.15, color='#81c784')
+          ax1.set_title(f'LLxickVPN — Латентность | {upd_date} МСК', color='white', fontsize=12, pad=10)
+          ax1.set_ylabel('Латентность (сек)', color='#aaaaaa')
+          ax1.tick_params(colors='#aaaaaa')
+          ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+          ax1.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+          plt.setp(ax1.xaxis.get_majorticklabels(), rotation=30)
+          for spine in ax1.spines.values():
               spine.set_edgecolor('#333355')
-
-          ax.legend(facecolor='#1a1a2e', labelcolor='white', edgecolor='#333355')
-          ax.grid(alpha=0.15, color='white')
-
+          ax1.legend(facecolor='#1a1a2e', labelcolor='white', edgecolor='#333355')
+          ax1.grid(alpha=0.15, color='white')
           if times:
-              ax.annotate(f'  {final}', xy=(times[-1], final), color='#81c784', fontsize=10)
-              ax.annotate(f'  {total}', xy=(times[-1], total), color='#4fc3f7', fontsize=10)
+              ax1.annotate(f'  {best_lat:.3f}s', xy=(times[-1], best_lat), color='#81c784', fontsize=9)
+              ax1.annotate(f'  {avg_lat:.3f}s', xy=(times[-1], avg_lat), color='#ffb74d', fontsize=9)
 
-          plt.tight_layout()
+          # --- График 2: Количество рабочих конфигов ---
+          ax2.set_facecolor('#16213e')
+          ax2.plot(times, workings, color='#4fc3f7', linewidth=2, marker='o', markersize=4, label='Топ 50 конфигов (<2s)')
+          ax2.fill_between(times, workings, alpha=0.15, color='#4fc3f7')
+          ax2.set_title('Количество конфигов в подписке', color='white', fontsize=12, pad=10)
+          ax2.set_xlabel('Время (UTC)', color='#aaaaaa')
+          ax2.set_ylabel('Конфигов', color='#aaaaaa')
+          ax2.tick_params(colors='#aaaaaa')
+          ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+          ax2.xaxis.set_major_locator(mdates.HourLocator(interval=2))
+          plt.setp(ax2.xaxis.get_majorticklabels(), rotation=30)
+          for spine in ax2.spines.values():
+              spine.set_edgecolor('#333355')
+          ax2.legend(facecolor='#1a1a2e', labelcolor='white', edgecolor='#333355')
+          ax2.grid(alpha=0.15, color='white')
+          if times:
+              ax2.annotate(f'  {final}', xy=(times[-1], final), color='#4fc3f7', fontsize=9)
+
+          plt.tight_layout(pad=2.0)
           plt.savefig("chart.png", dpi=130, bbox_inches='tight', facecolor='#1a1a2e')
           print("Chart saved.")
 
@@ -207,13 +238,15 @@ jobs:
           fi
 
           LINE1="🔐 *LLxickVPN — Отчёт проверки*"
-          LINE2="🕐 *Обновлено:* \`$UPD_DATE UTC\`"
+          LINE2="🕐 *Обновлено:* \`$UPD_DATE МСК\`"
           LINE3="📦 *Всего собрано:* \`$TOTAL\`"
-          LINE4="✅ *Топ 50 (<2s):* \`$FINAL\` ($PERCENT%)"
-          LINE5="$TREND *Изменение:* \`$DELTA\` за 30 мин"
-          LINE6="↩️ Обновление каждые 30 минут автоматически"
-          LINE7="📢 @LLxickVPN"
-          MESSAGE=$(printf '%s\n\n%s\n%s\n%s\n%s\n\n%s\n%s' "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6" "$LINE7")
+          LINE4="✅ *В подписке:* \`$FINAL\` ($PERCENT%)"
+          LINE5="⚡ *Лучшая латентность:* \`${BEST_LATENCY}s\`"
+          LINE6="📊 *Средняя латентность:* \`${AVG_LATENCY}s\`"
+          LINE7="$TREND *Изменение:* \`$DELTA\` за 30 мин"
+          LINE8="↩️ Обновление каждые 30 минут автоматически"
+          LINE9="📢 @LLxickVPN"
+          MESSAGE=$(printf '%s\n\n%s\n%s\n%s\n%s\n%s\n%s\n\n%s\n%s' "$LINE1" "$LINE2" "$LINE3" "$LINE4" "$LINE5" "$LINE6" "$LINE7" "$LINE8" "$LINE9")
 
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendPhoto" \
             -F "chat_id=${TG_CHAT_ID}" \
