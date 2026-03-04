@@ -279,5 +279,4 @@ jobs:
           git config --global user.email "bot@github.com"
           git add results.txt history.json chart.png
           git commit -m "Auto-update: $(date +'%Y-%m-%d %H:%M:%S')" || exit 0
-          git pull --rebase origin main
-          git push
+          git push --force
