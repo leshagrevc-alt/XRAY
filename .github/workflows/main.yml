@@ -63,7 +63,15 @@ jobs:
           python3 -m http.server 8000 &
           sleep 3
 
-          ./xray-checker --subscription-url="http://localhost:8000/check.txt" --run-once > full_log.txt 2>&1
+          # Проверяем реальной загрузкой файла — отсеивает "замороженные" конфиги
+          ./xray-checker \
+            --subscription-url="http://localhost:8000/check.txt" \
+            --proxy-check-method=download \
+            --proxy-download-url="http://speedtest.tele2.net/1MB.zip" \
+            --proxy-download-min-size=51200 \
+            --proxy-download-timeout=15 \
+            --proxy-timeout=10 \
+            --run-once > full_log.txt 2>&1
 
           UPD_DATE=$(TZ='Europe/Moscow' date +'%d.%m.%Y %H:%M')
           ANNOUNCE_TEXT="UPD: $UPD_DATE | обновление каждые 30 мин | тгк @LLxickVPN"
@@ -82,7 +90,6 @@ jobs:
             latency=$(echo "$line" | grep -oP 'Latency: \K[0-9.]+' | head -n 1)
             proxy_name=$(echo "$line" | sed -E 's/^[0-9\/ :]* [0-9]{2}:[0-9]{2}:[0-9]{2} (.*) \| Success.*/\1/' | xargs)
             if [ ! -z "$latency" ] && [ ! -z "$proxy_name" ]; then
-              # Сохраняем все латентности для статистики
               echo "$latency" >> all_latencies.tmp
               if (( $(echo "$latency < 2.0" | bc -l) )); then
                 config=$(grep -F "$proxy_name" check.txt | head -n 1)
@@ -97,14 +104,12 @@ jobs:
             fi
           done
 
-          # 25 лучших WI-FI + 25 лучших LTE, убираем латентность и номер из метки
           sort -n wifi.tmp -o wifi_sorted.tmp
           head -n 25 wifi_sorted.tmp | sed 's/^[0-9.]* //; s/#\[WI-FI\] N[0-9]*$/#[WI-FI]/' >> results.txt
 
           sort -n lte.tmp -o lte_sorted.tmp
           head -n 25 lte_sorted.tmp | sed 's/^[0-9.]* //; s/#\[LTE\] N[0-9]*$/#[LTE]/' >> results.txt
 
-          # Считаем статистику латентностей
           BEST_LATENCY=$(sort -n all_latencies.tmp | head -n 1)
           AVG_LATENCY=$(awk '{sum+=$1; count++} END {if(count>0) printf "%.3f", sum/count}' all_latencies.tmp)
           [ -z "$BEST_LATENCY" ] && BEST_LATENCY="0"
