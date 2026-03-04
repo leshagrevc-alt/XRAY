@@ -115,10 +115,10 @@ jobs:
           sort -n lte.tmp -o lte_sorted.tmp
           head -n 25 lte_sorted.tmp | sed 's/^[0-9.]* //; s/#\[LTE\] N[0-9]*$/#[LTE]/' >> results.txt
 
-          BEST_LATENCY=$(sort -n all_latencies.tmp | head -n 1)
-          AVG_LATENCY=$(awk '{sum+=$1; count++} END {if(count>0) printf "%.3f", sum/count}' all_latencies.tmp)
-          [ -z "$BEST_LATENCY" ] && BEST_LATENCY="0"
-          [ -z "$AVG_LATENCY" ] && AVG_LATENCY="0"
+          BEST_LATENCY=$(sort -n all_latencies.tmp 2>/dev/null | head -n 1 | tr -d '[:space:]')
+          AVG_LATENCY=$(awk '{sum+=$1; count++} END {if(count>0) printf "%.3f", sum/count; else print "0"}' all_latencies.tmp 2>/dev/null | tr -d '[:space:]')
+          [[ -z "$BEST_LATENCY" || ! "$BEST_LATENCY" =~ ^[0-9.]+$ ]] && BEST_LATENCY="0"
+          [[ -z "$AVG_LATENCY" || ! "$AVG_LATENCY" =~ ^[0-9.]+$ ]] && AVG_LATENCY="0"
 
           rm -f wifi.tmp lte.tmp wifi_sorted.tmp lte_sorted.tmp all_latencies.tmp
 
