@@ -1,12 +1,11 @@
 #profile-title: LLxickVPN
 #support-url: https://t.me/LLxick2
 #profile-update-interval: 1
-#announce: UPD: 13.03.2026 18:35 | обновление каждые 30 мин | тгк @LLxickVPN
+#announce: UPD: 13.03.2026 19:31 | обновление каждые 30 мин | тгк @LLxickVPN
 
-vless://14b02e2a-8930-4afb-8412-ea4a4954ca5b@66.92.20.111:443?&security=tls&fp=chrome&sni=zgtwylnhh.cc.cd&type=ws&headerType=none&host=zgtwylnhh.cc.cd&path=Telegram%F0%9F%87%A8%F0%9F%87%B3%40WangCai2#[WI-FI]
-vless://948fac3c-42bf-41a6-a5f9-704d36ff0d8d@222.109.53.68:10162?&security=tls&fp=random&alpn=http/1.1&sni=snippet.danfeng.theworkpc.com&type=ws&headerType=none&host=snippet.danfeng.theworkpc.com&path=%2Fdanfeng#[WI-FI]
-vless://ba98d5f4-c5ff-4069-8e97-91d8214e1b84@rucent.vcloudn.com:443?security=reality&type=tcp&flow=xtls-rprx-vision&sni=google.com&pbk=xPcD0sXKZHYwuNUMhZVQ-1OeRY-j2OjAxn0BqikZr1o#[WI-FI]
-vless://bbb1e4aa-b120-40dd-88d7-b93c7ef07006@51.250.4.10:443?type=tcp&security=reality&encryption=none&flow=xtls-rprx-vision&fp=qq&pbk=FkmYFobwxLMLEktYXywmjthuEYCZggITsxwPNasTKUg&sid=4b523a98e1bbd15b&sni=ads.x5.ru&spx=/#[LTE]
-vless://bbb1e4aa-b120-40dd-88d7-b93c7ef07006@51.250.4.10:443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=qq&sni=api-maps.yandex.ru&pbk=FkmYFobwxLMLEktYXywmjthuEYCZggITsxwPNasTKUg&sid=17f0f0e38f01af5a&spx=%2F#[LTE]
-vless://4262ba73-f5ba-07d0-9714-a2a8a19ae6d8@146.185.241.153:443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=chrome&sni=max.ru&pbk=4CH3o5zOMcFNMbnwXnkAg0FFepmsc0QzhahXkUzb1ik&sid=d8c6b58bcbb0c323#[LTE]
-vless://464854c0-d879-433b-8ae2-28bfe19ed08e@pln3.fastdbn.com:443?security=reality&type=xhttp&mode=packet-up&extra=%7B%22scMaxEachPostBytes%22%3A+1000000%2C+%22scMaxConcurrentPosts%22%3A+100%2C+%22scMinPostsIntervalMs%22%3A+30%2C+%22xPaddingBytes%22%3A+%22100-1000%22%2C+%22noGRPCHeader%22%3A+false%7D&sni=ftp.ipv6.debian.org&fp=qq&pbk=12UHjWCU_BNIkRmxt-6QKAuVuSIFzoS2jkN1BIMzGjM&spx=%2F&sid=cdce15b3e2179ce8#[LTE]
+vless://14b02e2a-8930-4afb-8412-ea4a4954ca5b@59.3.3.161:8443?type=ws&encryption=none&host=ylnhh.cc.cd&path=%2FTelegram%F0%9F%87%A8%F0%9F%87%B3%40WangCai2&headerType=none&quicSecurity=none&serviceName=&security=tls&fp=chrome&insecure=1&sni=ylnhh.cc.cd#[WI-FI]
+vless://35b9becb-2488-447c-ad69-e839f2fc13c1@95.85.253.87:443?encryption=none&type=grpc&security=reality&mode=gun&sni=eh.vk.com&pbk=G1QPj-IQQVssEsfjld6gGOlxhgXDYdg56cYdweymLy0&sid=3ef8cdbc#[LTE]
+vless://35b9becb-2488-447c-ad69-e839f2fc13c1@95.85.253.87:443?encryption=none&flow=&type=grpc&mode=gun&serviceName=&authority=&security=reality&sni=eh.vk.com&pbk=G1QPj-IQQVssEsfjld6gGOlxhgXDYdg56cYdweymLy0&sid=3ef8cdbc#[LTE]
+vless://7fc953d6-ae75-46fb-a970-10b57d513487@185.40.152.54:7443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=random&sni=eh.vk.com&pbk=BTkKaFt2xac4xAHn3EXrBKV0d8ItHSfciMFnxg57BGA&sid=fd88bd27db4cc661#[LTE]
+vless://f6faba68-42c7-4eb6-ab60-15177e3aa4ea@176.109.104.58:10443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=randomized&sni=pimg.mycdn.me&pbk=4jkTVxhDBqn2B-jBylY8zUEQg2VbDtmmYX2nz2kdgz8&sid=e6b3a1d7f02c9e54&spx=%2F#[LTE]
+vless://4262ba73-f5ba-2710-9714-a2a8a19ae6d8@89.208.229.144:443?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&fp=qq&sni=max.ru&pbk=4CH3o5zOMcFNMbnwXnkAg0FFepmsc0QzhahXkUzb1ik&sid=d8c6b58bcbb0c323#[LTE]
